@@ -81,7 +81,10 @@ void WifiCustomizing::finishParameters()
     EEPROM.begin(requiredMemorySize+sizeof(dataSavedFlag)); // or simply EEPROM.begin(512)
 }
 
-// TODO robust machen gegen Mülleinträge, 
+/***
+    load string from EEPROM until either maxlength or '0'
+ **/
+ 
 int WifiCustomizing::loadDynamic(int startPos,char *value,int maxLength)
 {
     LOG1(Logging::INFO,"loadDynamic max:%d",maxLength);
@@ -119,15 +122,14 @@ bool WifiCustomizing::loadCustomizing()
             entry = this->customizingList.get(i);
 
             loadPosition = loadDynamic(loadPosition,valueBuffer,entry->maxlength);
-            Serial.println("loadDynamic finished");
+            
             if (entry->value != NULL) {
                 free(entry->value);
             }
-            Serial.println("1");
+            
+            // values are dynamically managed on heap
             entry->value = (char *)malloc(strlen(valueBuffer)); // only til '\0'
-            Serial.println("2");
             strcpy(entry->value,valueBuffer);
-            Serial.println("3");
         }
         return true;
     } else {
@@ -190,19 +192,14 @@ bool WifiCustomizing::connect()
 {
     //check, if wifi credentials are already in EEPROM
     if (this->loadCustomizing()) {
-        LOG(Logging::INFO,"Valid customizing entries found");
-    
         LOG(Logging::INFO,"Credentials found ...");
         if (connectToWifi()) {
-            //setupWifiAP();
             return true;
         } else {
-            //setupWifiAP();
             return false;
         }
     } else {
         LOG(Logging::INFO,"No credential in EEPROM, please connect to AP and customize");
-        //setupWifiAP();
         return false;
     }
 }
@@ -285,11 +282,6 @@ void WifiCustomizing::handleClient()
     this->customizingServer->handleClient();
 }
 
-#define COPYPARAM(p) \
-if (customizingServer->argName(i) == #p) { \
-snprintf(this->wifiData.p,sizeof(this->wifiData.p),argValue.c_str()); \
-}
-
 
 void WifiCustomizing::handleRoot()
 {
@@ -303,7 +295,6 @@ void WifiCustomizing::handleRoot()
             
             CustomizingEntry *entry = this->customizingList.get(i);
             
-            // allocate string for value TODO: free
             if (entry->value != NULL) {
                 free(entry->value);
             }
@@ -319,13 +310,11 @@ void WifiCustomizing::handleRoot()
     
     LOG(Logging::INFO,"handleRoot, sending HTML");
     sendHTML();
-    
-    
 }
 
 String WifiCustomizing::htmlFromCustomizingEntry(CustomizingEntry *entry)
 {
-    /*
+    /* String to be created:
      <tr><td>SSID:    </td><td> <input type='text' value='%s' name='ssid' size='%d' placeholder=\"Wifi SSID\" maxlength='%d' ></td></tr>\
      */
     
