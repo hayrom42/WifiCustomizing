@@ -35,11 +35,11 @@ const byte dataSavedFlag = 0b10101010;
 
 
 // constructor/destructor
-WifiCustomizing::WifiCustomizing(String ssidAP,Logging *logger)
+WifiCustomizing::WifiCustomizing(Logging *logger)
 {
     
     this->logger = logger;
-    this->ssidAP = ssidAP;
+    //this->ssidAP = ssidAP;
     this->customizingServer = new ESP8266WebServer(80);
     
     // initialize customizing list
@@ -84,16 +84,23 @@ void WifiCustomizing::finishParameters()
 // TODO robust machen gegen Mülleinträge, 
 int WifiCustomizing::loadDynamic(int startPos,char *value,int maxLength)
 {
+    LOG1(Logging::INFO,"loadDynamic max:%d",maxLength);
     int i=0;
     do
     {
-        value[i] = EEPROM.read(i+startPos);
+        byte b = EEPROM.read(i+startPos);
+        if (isalnum(b) || ispunct(b) || b==0) {
+            value[i] = (char)b;
+        } else {
+            value[i]='?';
+        }
+        
         i++;
     } while (value[i-1] != '\0' && i<maxLength);
     if (i==maxLength) {
         value[maxLength] = '\0';
     }
-    
+    Serial.println();
     LOG2(Logging::INFO,"loadDynamic(%d,%s)",startPos,value);
     return i+startPos;
 }
@@ -112,11 +119,15 @@ bool WifiCustomizing::loadCustomizing()
             entry = this->customizingList.get(i);
 
             loadPosition = loadDynamic(loadPosition,valueBuffer,entry->maxlength);
+            Serial.println("loadDynamic finished");
             if (entry->value != NULL) {
                 free(entry->value);
             }
+            Serial.println("1");
             entry->value = (char *)malloc(strlen(valueBuffer)); // only til '\0'
+            Serial.println("2");
             strcpy(entry->value,valueBuffer);
+            Serial.println("3");
         }
         return true;
     } else {
@@ -206,8 +217,12 @@ void WifiCustomizing::setupWifiAP()
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));   // subnet FF FF FF 00
     
+    // generate a unique name for the accesspoint
+    String APName = WiFi.macAddress();
+    APName.replace(":","_");
+    
     /* You can remove the password parameter if you want the AP to be open. */
-    WiFi.softAP(this->ssidAP.c_str(),"configpwd");
+    WiFi.softAP(APName.c_str(),"configpwd");
     // TODO: captive portal???
     
     IPAddress myIP = WiFi.softAPIP();
@@ -315,27 +330,13 @@ String WifiCustomizing::htmlFromCustomizingEntry(CustomizingEntry *entry)
      */
     
     String retval = String("<tr><td>" + String(entry->label));
-    LOG(Logging::INFO,retval.c_str());
-    
-    LOG(Logging::INFO,(entry->value==NULL)?"x":entry->value);
-    
-    
     retval += String("</td><td> <input type='text' value='" + String((entry->value==NULL)?"":entry->value)); // initialize values with empty string
-    
-    //retval += String("</td><td> <input type='text' value='"); // initialize values with empty string
-    LOG(Logging::INFO,retval.c_str());
     retval += String("' name='" + String(entry->name));
-    LOG(Logging::INFO,retval.c_str());
     retval += String("' size='" + String(entry->size));
-    LOG(Logging::INFO,retval.c_str());
     retval += String("' placeholder='" + String(entry->placeholder));
-    LOG(Logging::INFO,retval.c_str());
     retval += String("' maxlength='" + String(entry->maxlength));
-    LOG(Logging::INFO,retval.c_str());
     retval += String("' ></td></tr>" );
     
-    
-    LOG(Logging::INFO,retval.c_str());
     return retval;
 }
 

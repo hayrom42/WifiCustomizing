@@ -55,7 +55,7 @@ private:
     
     
 public:
-    WifiCustomizing(String ssidAP, Logging *logger=NULL);
+    WifiCustomizing(Logging *logger=NULL);
     ~WifiCustomizing();
     
     void addParameter(char *name, char*label,char* placeholder,int size, int maxlength);
