@@ -1,6 +1,6 @@
 //
 //  WifiCustomizing.cpp
-//  
+//
 //
 //  Created by Roman Hayer on 08.05.18.
 //
@@ -37,15 +37,15 @@ const byte dataSavedFlag = 0b10101010;
 // constructor/destructor
 WifiCustomizing::WifiCustomizing(Logging *logger)
 {
-    
+
     this->logger = logger;
     //this->ssidAP = ssidAP;
     this->customizingServer = new ESP8266WebServer(80);
-    
+
     // initialize customizing list
     this->addParameter("ssid","Wifi ssid","the ssid of your wifi",32,32);
     this->addParameter("pwd","Wifi Password","the password of your wifi",32,64);
-    
+
 }
 
 WifiCustomizing::~WifiCustomizing()
@@ -74,17 +74,17 @@ void WifiCustomizing::finishParameters()
     for (int i=0; i<this->customizingList.size(); i++) {
         entry = this->customizingList.get(i);
         requiredMemorySize += entry->maxlength;
-        
+
         LOG2(Logging::INFO,"Name: %s, Label:%s",entry->name,entry->label);
     }
-    
+
     EEPROM.begin(requiredMemorySize+sizeof(dataSavedFlag)); // or simply EEPROM.begin(512)
 }
 
 /***
     load string from EEPROM until either maxlength or '0'
  **/
- 
+
 int WifiCustomizing::loadDynamic(int startPos,char *value,int maxLength)
 {
     LOG1(Logging::INFO,"loadDynamic max:%d",maxLength);
@@ -97,7 +97,7 @@ int WifiCustomizing::loadDynamic(int startPos,char *value,int maxLength)
         } else {
             value[i]='?';
         }
-        
+
         i++;
     } while (value[i-1] != '\0' && i<maxLength);
     if (i==maxLength) {
@@ -115,18 +115,18 @@ bool WifiCustomizing::loadCustomizing()
     byte savedFlag;
     EEPROM.get(loadPosition, savedFlag);
     loadPosition += sizeof(savedFlag);
-    
+
     if (savedFlag == dataSavedFlag) { // we found meaningful values}
         CustomizingEntry *entry;
         for (int i=0; i<this->customizingList.size(); i++) {
             entry = this->customizingList.get(i);
 
             loadPosition = loadDynamic(loadPosition,valueBuffer,entry->maxlength);
-            
+
             if (entry->value != NULL) {
                 free(entry->value);
             }
-            
+
             // values are dynamically managed on heap
             entry->value = (char *)malloc(strlen(valueBuffer)); // only til '\0'
             strcpy(entry->value,valueBuffer);
@@ -146,7 +146,7 @@ int WifiCustomizing::saveDynamic(int startPos,const char *value)
         EEPROM.write(i+startPos,(byte)value[i]);
         i++;
     } while (value[i-1] != '\0');
-    
+
     return i+startPos;
 }
 
@@ -157,7 +157,7 @@ void WifiCustomizing::saveCustomizing()
     int savePosition = 0;
     EEPROM.put(savePosition,dataSavedFlag); // first mark the memory as used
     savePosition +=sizeof(dataSavedFlag);
-    
+
     CustomizingEntry *entry;
     for (int i=0; i<this->customizingList.size(); i++) {
         entry = this->customizingList.get(i);
@@ -167,7 +167,9 @@ void WifiCustomizing::saveCustomizing()
     EEPROM.commit();
 }
 
-
+/*
+  Retrieve value from customizing entry
+*/
 char *WifiCustomizing::getValue(const char *name)
 {
     CustomizingEntry *entry;
@@ -208,23 +210,23 @@ bool WifiCustomizing::connect()
 void WifiCustomizing::setupWifiAP()
 {
     IPAddress    apIP(42, 42, 42, 42);
-    
+
     LOG1(Logging::INFO,"Launching AP: %s",this->ssidAP.c_str())
     //set-up the custom IP address
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));   // subnet FF FF FF 00
-    
+
     // generate a unique name for the accesspoint
     String APName = WiFi.macAddress();
     APName.replace(":","_");
-    
+
     /* You can remove the password parameter if you want the AP to be open. */
     WiFi.softAP(APName.c_str(),"configpwd");
     // TODO: captive portal???
-    
+
     IPAddress myIP = WiFi.softAPIP();
     setupWebServer();
-    
+
 }
 
 bool WifiCustomizing::connectToWifi()
@@ -233,7 +235,7 @@ bool WifiCustomizing::connectToWifi()
     String pwd = String(((CustomizingEntry *)(this->customizingList.get(IDX_PWD)))->value);
     LOG2(Logging::INFO,"Wifi.begin(%s,%s)",ssid.c_str(),pwd.c_str());
     WiFi.begin(ssid.c_str(), pwd.c_str());
-    
+
     // connect to the WIFI
     int tryCounter = 20;   //try 20 seconds to connect ==> should be increased in reality
     while ((WiFi.status() != WL_CONNECTED) && (tryCounter > 0) )
@@ -251,7 +253,7 @@ bool WifiCustomizing::connectToWifi()
             this->customizingServer->handleClient();
         }
     }
-    
+
     if (tryCounter==0) {
         LOG(Logging::INFO,"Connect to wifi failed");
         LOG(Logging::INFO,"data should be configured anew via accesspoint");
@@ -259,7 +261,7 @@ bool WifiCustomizing::connectToWifi()
         return false;
     } else {
         LOG(Logging::INFO,"Connected");
-        
+
         return true;
     }
 }
@@ -273,7 +275,7 @@ void WifiCustomizing::setupWebServer()
     this->customizingServer->on ( "/submit", std::bind(&WifiCustomizing::handleRoot, this) );
     //this->customizingServer->on ( "/submit", std::bind(&WifiCustomizing::handleRoot, this));
 //    customizingServer.onNotFound ( handleNotFound );
-    
+
     this->customizingServer->begin();
 }
 
@@ -288,13 +290,13 @@ void WifiCustomizing::handleRoot()
     if (this->customizingServer->args() > 0 ) {
         for ( uint8_t i = 0; i < customizingServer->args(); i++ ) {
             String argValue = customizingServer->arg(i);
-            
+
             argValue.trim();
             int length = argValue.length();
             LOG2(Logging::INFO,"handleRoot: argValue=%s, Length: %d",argValue.c_str(),length);
-            
+
             CustomizingEntry *entry = this->customizingList.get(i);
-            
+
             if (entry->value != NULL) {
                 free(entry->value);
             }
@@ -305,9 +307,9 @@ void WifiCustomizing::handleRoot()
         connectToWifi();
     } else { //nothing sent via submit ==> initial call of website
         loadCustomizing();
-        
+
     }
-    
+
     LOG(Logging::INFO,"handleRoot, sending HTML");
     sendHTML();
 }
@@ -317,7 +319,7 @@ String WifiCustomizing::htmlFromCustomizingEntry(CustomizingEntry *entry)
     /* String to be created:
      <tr><td>SSID:    </td><td> <input type='text' value='%s' name='ssid' size='%d' placeholder=\"Wifi SSID\" maxlength='%d' ></td></tr>\
      */
-    
+
     String retval = String("<tr><td>" + String(entry->label));
     retval += String("</td><td> <input type='text' value='" + String((entry->value==NULL)?"":entry->value)); // initialize values with empty string
     retval += String("' name='" + String(entry->name));
@@ -325,7 +327,7 @@ String WifiCustomizing::htmlFromCustomizingEntry(CustomizingEntry *entry)
     retval += String("' placeholder='" + String(entry->placeholder));
     retval += String("' maxlength='" + String(entry->maxlength));
     retval += String("' ></td></tr>" );
-    
+
     return retval;
 }
 
@@ -347,19 +349,17 @@ void WifiCustomizing::sendHTML()
                     <h1>Distance Sensor Customizing</h1>\
                     <h2>Credentials of your WiFi</h2>\
     <table>";
-    
+
     for (int i=0; i<this->customizingList.size(); i++) {
         CustomizingEntry *entry = this->customizingList.get(i);
         html += htmlFromCustomizingEntry(entry);
     }
-    
+
     html += "</table>\
                 <input type='submit' value='Speichern'>\
                 </form>\
                 </body>\
                 </html>";
-    
+
     customizingServer->send ( 200, "text/html", html.c_str() );
 }
-
-
